@@ -22,11 +22,24 @@ export class AwsBedrockRuntimeHandler implements ApiHandler {
 
     async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
         const modelConfig = this.getModel()
-        let modelId = modelConfig.id
+        // cross region inference requires prefixing the model id with the region
+        let modelId: string
         if (this.options.awsUseCrossRegionInference) {
-            const regionPrefix = (this.options.awsRegion || "").slice(0, 3)
-            modelId = regionPrefix === "us-" ? `us.${modelId}` :
-                     regionPrefix === "eu-" ? `eu.${modelId}` : modelId
+            let regionPrefix = (this.options.awsRegion || "").slice(0, 3)
+            switch (regionPrefix) {
+                case "us-":
+                    modelId = `us.${modelConfig.id}`
+                    break
+                case "eu-":
+                    modelId = `eu.${modelConfig.id}`
+                    break
+                default:
+                    // cross region inference is not supported in this region, falling back to default model
+                    modelId = modelConfig.id
+                    break
+            }
+        } else {
+            modelId = modelConfig.id
         }
 
         // Convert messages to the format expected by Bedrock Runtime
